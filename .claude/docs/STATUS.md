@@ -12,15 +12,19 @@ Current phase: 1 (Database + embedding validation)
 - `.gitignore` no longer blanket-ignores `.claude/` — CLAUDE.md and docs/ are now tracked
 - §9 embedding validation spike (`spikes/embedding-check.ts`): voyage-4 @ 1024 dims,
   15/16 top-1 on 20 Swedish chunks × 16 queries (8 SE, 8 EN). See DECISIONS.md.
+- Supabase project created, pgvector enabled, `DATABASE_URL` in `.env`
+- Minimal TS project (`package.json`, `tsconfig.json`, `@types/bun`) for the scripts
+- dbmate installed; full §4 schema migration written and applied
+  (`db/migrations/20260917095138_create_schema.sql`), verified live against Supabase
 
 ## In progress
-- Phase 1: embedding model chosen, schema/migration not written yet
+- Phase 1 schema is live; nothing half-finished right now
 
 ## Next
-- Create Supabase project, enable pgvector
-- Write dbmate migration for full §4 schema (documents, chunks, facts, conversations,
-  messages, message_sources, query_traces) with embedding vector(1024)
-- HNSW + GIN indexes
+- Phase 2: ingestion pipeline (PDF/MD extract → clean → heading-aware chunk → embed → store)
+- Start on the Tier 1 corpus (CSN studiemedel/fribelopp/YH, FK föräldrapenning/VAB/SGI,
+  Skatteverket enskild firma + jämkning)
 
 ## Known issues / open questions
-- None currently blocking
+- `conversations.user_id` has no FK yet — deferred until Phase 5's own auth (JWT +
+  argon2id) creates a users table to reference
