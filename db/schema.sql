@@ -45,9 +45,9 @@ CREATE TABLE public.chunks (
     chunk_index integer NOT NULL,
     token_count integer NOT NULL,
     embedding public.vector(1024),
-    content_tsv tsvector GENERATED ALWAYS AS (to_tsvector('swedish'::regconfig, content)) STORED,
     superseded_at timestamp with time zone,
-    created_at timestamp with time zone DEFAULT now() NOT NULL
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    content_tsv tsvector GENERATED ALWAYS AS (to_tsvector('swedish'::regconfig, ((heading_path || ' '::text) || content))) STORED
 );
 
 
@@ -299,4 +299,5 @@ ALTER TABLE ONLY public.query_traces
 --
 
 INSERT INTO public.schema_migrations (version) VALUES
-    ('20260917095138');
+    ('20260917095138'),
+    ('20260917105356');
