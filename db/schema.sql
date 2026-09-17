@@ -47,7 +47,8 @@ CREATE TABLE public.chunks (
     embedding public.vector(1024),
     superseded_at timestamp with time zone,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
-    content_tsv tsvector GENERATED ALWAYS AS (to_tsvector('swedish'::regconfig, ((heading_path || ' '::text) || content))) STORED
+    content_tsv tsvector GENERATED ALWAYS AS (to_tsvector('swedish'::regconfig, ((heading_path || ' '::text) || content))) STORED,
+    content_hash text NOT NULL
 );
 
 
@@ -79,7 +80,8 @@ CREATE TABLE public.documents (
     last_checked_at timestamp with time zone,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     CONSTRAINT documents_source_type_check CHECK ((source_type = ANY (ARRAY['upload'::text, 'web'::text]))),
-    CONSTRAINT documents_status_check CHECK ((status = ANY (ARRAY['pending'::text, 'processing'::text, 'ready'::text, 'failed'::text])))
+    CONSTRAINT documents_status_check CHECK ((status = ANY (ARRAY['pending'::text, 'processing'::text, 'ready'::text, 'failed'::text]))),
+    CONSTRAINT documents_web_needs_url CHECK (((source_type <> 'web'::text) OR (source_url IS NOT NULL)))
 );
 
 
@@ -234,6 +236,13 @@ CREATE INDEX chunks_content_tsv_idx ON public.chunks USING gin (content_tsv);
 
 
 --
+-- Name: chunks_document_id_chunk_index_live_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX chunks_document_id_chunk_index_live_idx ON public.chunks USING btree (document_id, chunk_index) WHERE (superseded_at IS NULL);
+
+
+--
 -- Name: chunks_document_id_idx; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -244,7 +253,42 @@ CREATE INDEX chunks_document_id_idx ON public.chunks USING btree (document_id) W
 -- Name: chunks_embedding_idx; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX chunks_embedding_idx ON public.chunks USING hnsw (embedding public.vector_cosine_ops);
+CREATE INDEX chunks_embedding_idx ON public.chunks USING hnsw (embedding public.vector_cosine_ops) WHERE (superseded_at IS NULL);
+
+
+--
+-- Name: conversations_user_id_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX conversations_user_id_idx ON public.conversations USING btree (user_id);
+
+
+--
+-- Name: documents_source_url_web_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX documents_source_url_web_idx ON public.documents USING btree (source_url) WHERE (source_type = 'web'::text);
+
+
+--
+-- Name: message_sources_chunk_id_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX message_sources_chunk_id_idx ON public.message_sources USING btree (chunk_id);
+
+
+--
+-- Name: messages_conversation_id_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX messages_conversation_id_idx ON public.messages USING btree (conversation_id);
+
+
+--
+-- Name: query_traces_conversation_id_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX query_traces_conversation_id_idx ON public.query_traces USING btree (conversation_id);
 
 
 --
@@ -300,4 +344,5 @@ ALTER TABLE ONLY public.query_traces
 
 INSERT INTO public.schema_migrations (version) VALUES
     ('20260917095138'),
-    ('20260917105356');
+    ('20260917105356'),
+    ('20260917110342');
