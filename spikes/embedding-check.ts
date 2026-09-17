@@ -74,8 +74,8 @@ async function embed(texts: string[], inputType: "document" | "query") {
 
   if (!res.ok) throw new Error(`Voyage ${res.status}: ${await res.text()}`);
 
-  const json = await res.json();
-  return json.data.map((d: { embedding: number[] }) => d.embedding);
+  const json = (await res.json()) as { data: { embedding: number[] }[] };
+  return json.data.map((d) => d.embedding);
 }
 
 // Cosine similarity: 1 means identical direction, 0 means unrelated.
