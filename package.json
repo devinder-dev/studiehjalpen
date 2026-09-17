@@ -3,7 +3,10 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "db:migrate": "dbmate --no-dump-schema up && bun run db:dump",
+    "db:rollback": "dbmate --no-dump-schema rollback && bun run db:dump",
+    "db:dump": "dbmate dump -- --schema=public"
   },
   "devDependencies": {
     "@types/bun": "^1.4.2",
