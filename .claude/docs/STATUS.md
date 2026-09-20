@@ -1,7 +1,7 @@
 # Status
 
-Last worked: 2026-09-17
-Current phase: 1 (Database + embedding validation) — nearly done, one item left
+Last worked: 2026-09-20
+Current phase: 1 complete (tagged `phase-1-done`). Phase 2 (ingestion) is next.
 
 ## How to run things
 
@@ -10,13 +10,16 @@ Current phase: 1 (Database + embedding validation) — nearly done, one item lef
   Supabase's internal schemas. The wrapper keeps it to `public` only.
 - `bun run db:rollback` — roll back one migration (same wrapper reason).
 - `bun run typecheck` — what CI runs.
-- `bun run spikes/embedding-check.ts` — Swedish embedding quality check (costs
-  Voyage tokens, ~36 short inputs per run).
+- `bun run spikes/embedding-check.ts` — Swedish embedding quality, cosine in
+  memory, no database (~36 Voyage inputs per run).
 - `bun run spikes/db-check.ts` — connection, pgvector, tables, indexes.
+- `bun run spikes/vector-search-check.ts` — full round trip: embed, insert,
+  query pgvector, check the plan. Inserts two `SPIKE:` documents and deletes
+  them again (~36 Voyage inputs per run).
 
 `.env` holds `VOYAGE_API_KEY` and `DATABASE_URL` (gitignored).
 
-## Done
+## Done — Phase 1
 
 - Repo, CLAUDE.md, README with architecture decisions, pushed to
   github.com/devinder-dev/studiehjalpen
@@ -35,30 +38,42 @@ Current phase: 1 (Database + embedding validation) — nearly done, one item lef
   2. `heading_path` folded into `content_tsv`
   3. chunk-level `content_hash`, partial indexes on `superseded_at`, live-chunk
      and `source_url` uniqueness, FK indexes
+- **Vector search proven end to end** (`spikes/vector-search-check.ts`): 20 real
+  Swedish chunks plus 2000 random-vector filler rows inserted, queried through
+  pgvector. Same 15/16 top-1 as the in-memory run, so storage and retrieval
+  don't distort the ranking. `explain analyze` confirms
+  `Index Scan using chunks_embedding_idx`, 1.3 ms against 2020 rows. Two negative
+  controls in the same script fall back to a seq scan (~10 ms), which is the
+  point of running them.
 
-## Next — finish Phase 1
-
-- **Throwaway vector-search script** (the one remaining Phase 1 deliverable from
-  PLAN.md §8). Nothing has actually written a vector into pgvector and queried it
-  yet — `embedding-check.ts` does cosine in memory, `db-check.ts` only inspects
-  schema. So the HNSW index is unproven end to end. Script should: embed a handful
-  of Swedish chunks, insert them, run `order by embedding <=> $1`, confirm sane
-  results and that `explain` actually uses `chunks_embedding_idx`.
-- Then tag `phase-1-done` per PLAN.md §8 and update the README status line.
-
-## Then — Phase 2 (ingestion)
+## Next — Phase 2 (ingestion)
 
 PDF/MD extract → clean → heading-aware chunk → embed → store. Status machine,
 content-hash dedupe, chunker unit tests in CI. Ingest the Tier 1 corpus (CSN
 studiemedel/fribelopp/YH, FK föräldrapenning/VAB/SGI, Skatteverket enskild firma
 + jämkning).
 
+The chunking decision that was blocking this is now made and recorded: `content`
+holds clean body text, `heading_path` stays separate, and the heading prefix is
+applied only to the string sent to Voyage. `vector-search-check.ts` already
+writes rows that shape.
+
+**Do this before ingesting anything:** Voyage's free tier without a payment
+method is 3 requests/min and 10K tokens/min — PLAN.md §9.3, discovered by
+hitting it. The 200M free tokens still apply once a card is added, so adding one
+costs nothing and removes the limit. The Tier 1 corpus at 3 RPM would otherwise
+be a long evening. `vector-search-check.ts` has a 25 s backoff on 429 that Phase 2
+should reuse rather than reinvent.
+
 ## Known issues / open questions
 
-- **Decide first thing in Phase 2:** does `chunks.content` store clean body text
-  with `heading_path` kept separate (what the schema assumes), or the
-  `[Studiemedel > Fribelopp]` prefix baked in like the spike script did? If
-  ingestion bakes it in, heading terms are counted twice in `content_tsv` ranking.
+- `DATABASE_URL` uses Supabase's **transaction pooler (port 6543)**, where named
+  prepared statements collide across runs. Spikes work around it with
+  `new SQL(url, { prepare: false })`. Phase 3's long-lived API process should
+  decide properly: session pooler or direct connection on 5432, versus keeping
+  prepare off. See DECISIONS.md 2026-09-20.
+- `token_count` is filled with a character-length estimate in the spike. PLAN.md
+  §5 requires a real tokenizer; Phase 2 owes one.
 - `conversations.user_id` has no FK — deferred until Phase 5's own auth
   (JWT + argon2id) creates a users table to reference.
 - `message_sources.similarity_score` will hold an RRF fused score, not a cosine

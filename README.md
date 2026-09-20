@@ -2,7 +2,7 @@
 
 A RAG (Retrieval-Augmented Generation) assistant that answers questions about Swedish student and worker bureaucracy — CSN, Försäkringskassan, A-kassa, Skatteverket and YH/LIA rules — grounded in official documents, with the source shown for every answer.
 
-**Status:** in development. Phase 0 of 6.
+**Status:** in development. Phase 1 of 6 complete — schema, embedding model and vector search verified against a live database. Phase 2 (ingestion) next.
 
 ---
 

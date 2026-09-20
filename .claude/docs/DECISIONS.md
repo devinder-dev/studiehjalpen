@@ -55,3 +55,30 @@ but silently degrades retrieval as superseded rows accumulate.
 the second one, editing a single paragraph re-embeds the whole document.
 The app owns the hash algorithm rather than a generated column, because the
 comparison happens against candidate text that isn't in the database yet.
+
+## 2026-09-20 — chunks.content stores clean body text, not the heading prefix
+The `[Studiemedel > Fribelopp]` prefix is applied only to the string sent to the
+embedding API. `content` holds body text and `heading_path` stays its own column.
+`content_tsv` already indexes `heading_path || ' ' || content`, so baking the prefix
+into `content` would count heading terms twice in `ts_rank` — skewing the keyword
+half of hybrid search on exactly the exact-match terms it exists to catch. Citation
+cards also want clean text, and the embedding still gets its heading context.
+Alternative rejected: storing the prefixed string, as `spikes/embedding-check.ts`
+did — one field instead of two, at the cost of double-weighted headings and prefix
+markup leaking into every quoted citation.
+
+## 2026-09-20 — Bun's SQL client runs with prepare: false
+`DATABASE_URL` points at Supabase's transaction pooler (port 6543), which multiplexes
+client sessions onto shared server connections. Bun's SQL client uses named prepared
+statements by default, and those names survive on the server connection, so a second
+run of the same query fails with `prepared statement "..." already exists`.
+Alternative rejected: moving to the session pooler or a direct connection — the right
+answer once there is a long-lived API process holding its own pool, and worth
+revisiting in Phase 3. Until then the transaction pooler is fine with prepare off.
+
+## 2026-09-20 — Bulk inserts pass rows as one jsonb parameter
+`insert ... select from jsonb_to_recordset($1::jsonb)`. Bun's SQL client serialises a
+JS array by joining it with commas, which Postgres rejects as a malformed array
+literal, so `unnest($1::text[], ...)` does not work as written.
+Alternative rejected: one statement per row — correct but a round trip each, which
+matters over the network to Supabase and will matter far more in Phase 2 ingestion.
