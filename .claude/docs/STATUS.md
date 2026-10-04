@@ -1,7 +1,8 @@
 # Status
 
-Last worked: 2026-09-20
-Current phase: 1 complete (tagged `phase-1-done`). Phase 2 (ingestion) is next.
+Last worked: 2026-10-04
+Current phase: 2 (ingestion), in progress. Token counting and chunking are
+written; the chunker has a known overlap bug to fix first — see Known issues.
 
 ## How to run things
 
@@ -48,8 +49,16 @@ Current phase: 1 complete (tagged `phase-1-done`). Phase 2 (ingestion) is next.
 
 ## Next — Phase 2 (ingestion)
 
-Done: heading-aware chunker (`ingestion/chunk.ts`), tested in `ingestion/chunk.test.ts`
-(13 tests) — structure → paragraph → sentence → hard-cut, table-safe, real token counts.
+Done: real token counting (`ingestion/tokenize.ts`, 3 tests) and the heading-aware
+chunker (`ingestion/chunk.ts`, 13 tests) — structure → paragraph → sentence →
+hard-cut, table-safe, real token counts. `bun test` runs both in CI.
+
+**Start here next: the chunker overlap bug in Known issues below.** It is written
+and committed but produces chunks ~2x target with wholesale duplication, so
+nothing should be embedded until it's fixed — every bad chunk costs Voyage tokens
+and pollutes retrieval.
+
+Still to build in this phase:
 
 PDF/MD extract → clean → heading-aware chunk → embed → store. Status machine,
 content-hash dedupe, chunker unit tests in CI. Ingest the Tier 1 corpus (CSN
@@ -70,6 +79,37 @@ should reuse rather than reinvent.
 
 ## Known issues / open questions
 
+- **BUG — chunker overlap ignores its own cap, chunks come out ~2x target.**
+  `buildOverlap` in `ingestion/chunk.ts` exempts the first unit it picks from the
+  token cap (`if (picked.length > 0 && ...)`), and a "unit" can be a whole
+  paragraph. Measured at the defaults (target 650, overlap 60) on two ~630-token
+  Swedish paragraphs: chunk 0 = 632 tokens, chunk 1 = **1265 tokens**, overlap
+  carried = **632 tokens instead of 60**. Chunk 1 contained chunk 0 in full, so
+  the same text would be embedded, stored and retrieved twice — wasted Voyage
+  tokens and duplicate hits crowding the top-k at query time.
+  Fix direction: build overlap from the previous chunk's trailing *sentences*
+  (`splitIntoSentences(prevContent)`), not from packed units, and drop the
+  first-unit exemption so the cap always holds. If one trailing sentence alone
+  exceeds the cap, emit no overlap rather than cutting mid-sentence — PLAN.md §5
+  permits paragraph/sentence cuts only. A patch doing exactly this was written
+  and then reverted unapplied; it is not in git history, so it needs rewriting.
+- **Chunker packing arithmetic drifts under target.** `packSection` tracks
+  `currentTokens` as a running sum of per-unit `countTokens`, but BPE is not
+  additive and `countTokens` subtracts a constant 1 per call, so the sum
+  underestimates by about one token per unit. Measured: 15 sentence units summed
+  to 350 while the joined text was 364 (14 low). The packer decides with the sum
+  and records the joined value, so chunks land slightly over target in
+  proportion to how many units they hold. Fix direction: decide on
+  `countTokens([...currentUnits, unit].join("\n\n"))` instead of a running sum.
+- **Chunker test ceiling is too loose to catch the above.** `chunk.test.ts`
+  asserts no chunk exceeds `target + overlap + 50`, which the 1265-token case
+  blows past, but the fixture has no paragraph large enough to trigger it. Needs
+  a regression case with two paragraphs each near the target, asserting both the
+  size ceiling and that no chunk fully contains its predecessor.
+- The `-1` offset in `ingestion/tokenize.ts` is calibrated, not documented by
+  Voyage — it matched all 5 live samples exactly, but re-verify against real
+  `usage.total_tokens` once Phase 2 actually embeds the corpus, in case it
+  drifts at scale or across model versions.
 - `DATABASE_URL` uses Supabase's **transaction pooler (port 6543)**, where named
   prepared statements collide across runs. Spikes work around it with
   `new SQL(url, { prepare: false })`. Phase 3's long-lived API process should
