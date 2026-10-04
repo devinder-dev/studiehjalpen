@@ -48,6 +48,9 @@ Current phase: 1 complete (tagged `phase-1-done`). Phase 2 (ingestion) is next.
 
 ## Next — Phase 2 (ingestion)
 
+Done: heading-aware chunker (`ingestion/chunk.ts`), tested in `ingestion/chunk.test.ts`
+(13 tests) — structure → paragraph → sentence → hard-cut, table-safe, real token counts.
+
 PDF/MD extract → clean → heading-aware chunk → embed → store. Status machine,
 content-hash dedupe, chunker unit tests in CI. Ingest the Tier 1 corpus (CSN
 studiemedel/fribelopp/YH, FK föräldrapenning/VAB/SGI, Skatteverket enskild firma

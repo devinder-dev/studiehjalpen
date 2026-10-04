@@ -99,3 +99,19 @@ Alternative rejected: a calibrated chars-per-token heuristic — PLAN.md §5 exp
 rules this out, and Swedish compound words (`fribelopp`, `sjukpenninggrundande`)
 make char ratios unreliable anyway; the jämkning test sentence tokenizes 22% above
 a naive `length / 4` estimate.
+
+## 2026-10-04 — Chunker splits structure → paragraph → sentence → hard-cut, in that order
+`ingestion/chunk.ts` tries each split strategy only when the one above it still leaves
+a piece over the token target: markdown headings (##/###) first, then blank-line
+paragraphs, then sentences, then a character cut as the last resort. A contiguous run
+of `|`-prefixed lines is pulled out as one atomic table block before any of that, so a
+table can never be split mid-row — it rides along as a single oversized unit if it has
+to. Overlap is carried between chunks only inside the same section: a new heading
+always starts a fresh chunk with no bleed from the previous one, and overlap itself is
+capped at half of the previous chunk's tokens so a short chunk can't have its entire
+content duplicated into the next.
+Alternative rejected: a fixed-size sliding window over raw characters — the obvious
+naive approach, and exactly what PLAN.md §5 rules out: it ignores heading structure
+entirely (so a chunk can straddle two unrelated topics) and ignores real token counts
+(character length under-counts Swedish by ~20-30%, so windows sized in characters miss
+the actual 600-700 token target).
