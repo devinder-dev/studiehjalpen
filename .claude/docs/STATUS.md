@@ -72,8 +72,9 @@ should reuse rather than reinvent.
   `new SQL(url, { prepare: false })`. Phase 3's long-lived API process should
   decide properly: session pooler or direct connection on 5432, versus keeping
   prepare off. See DECISIONS.md 2026-09-20.
-- `token_count` is filled with a character-length estimate in the spike. PLAN.md
-  §5 requires a real tokenizer; Phase 2 owes one.
+- Resolved: `token_count` used a character-length estimate in the spike. PLAN.md
+  §5's real tokenizer now exists as `ingestion/tokenize.ts` (vendored voyage-4
+  tokenizer, offline BPE counting).
 - `conversations.user_id` has no FK — deferred until Phase 5's own auth
   (JWT + argon2id) creates a users table to reference.
 - `message_sources.similarity_score` will hold an RRF fused score, not a cosine

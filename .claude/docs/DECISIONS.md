@@ -82,3 +82,20 @@ JS array by joining it with commas, which Postgres rejects as a malformed array
 literal, so `unnest($1::text[], ...)` does not work as written.
 Alternative rejected: one statement per row — correct but a round trip each, which
 matters over the network to Supabase and will matter far more in Phase 2 ingestion.
+
+## 2026-10-04 — Real token counting via vendored Voyage tokenizer
+PLAN.md §5 requires counting with a real tokenizer, never char-length. Voyage has
+no tokenize endpoint and no official JS client, so `ingestion/tokenize.ts` loads
+voyage-4's own published `tokenizer.json`/`tokenizer_config.json` from Hugging Face
+(vendored in `vendor/`) via `@huggingface/tokenizers`, a zero-dependency BPE
+tokenizer. Calibrated against 5 live Voyage API calls: raw BPE count was exactly
+1 token higher than `usage.total_tokens` every time, across short/long and
+Swedish/English text, so `countTokens` subtracts that constant offset rather than
+guessing a ratio.
+Alternative rejected: `@huggingface/transformers` — same org, correct tokenizer,
+but pulls in `sharp` plus `onnxruntime-web`/`onnxruntime-node` for a job that's
+pure BPE counting with no model inference.
+Alternative rejected: a calibrated chars-per-token heuristic — PLAN.md §5 explicitly
+rules this out, and Swedish compound words (`fribelopp`, `sjukpenninggrundande`)
+make char ratios unreliable anyway; the jämkning test sentence tokenizes 22% above
+a naive `length / 4` estimate.

@@ -4,6 +4,7 @@
   "type": "module",
   "scripts": {
     "typecheck": "tsc --noEmit",
+    "test": "bun test",
     "db:migrate": "dbmate --no-dump-schema up && bun run db:dump",
     "db:rollback": "dbmate --no-dump-schema rollback && bun run db:dump",
     "db:dump": "dbmate dump -- --schema=public"
@@ -11,5 +12,8 @@
   "devDependencies": {
     "@types/bun": "^1.4.2",
     "typescript": "^7.0.2"
+  },
+  "dependencies": {
+    "@huggingface/tokenizers": "^0.2.0"
   }
 }
